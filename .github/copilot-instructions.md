@@ -2,7 +2,9 @@
 
 ## 1. High-Level Objective
 
-Your primary task is to help me build a **VS Code extension in TypeScript** named `copilot-metrics-exporter`. The goal of this extension is to capture usage metrics from my interactions with the GitHub Copilot Chat feature within VS Code. These metrics will then be exposed on a local HTTP endpoint in a Prometheus-compatible format. The ultimate goal is to visualize this data in a Grafana dashboard.
+Your primary task is to help me build a **VS Code extension in TypeScript** named `copilot-metrics-exporter`. The goal of this extension is to capture usage metrics from my interactions with the GitHub Copilot Chat feature within VS Code. These metrics will be exposed on a local HTTP endpoint in a Prometheus-compatible format, for visualization in Grafana.
+
+**Important:** There is no public API for directly monitoring Copilot Chat events. Instead, we will extract metrics by reading and parsing Copilot Chat log files written by the extension itself.
 
 ## 2. Core Technologies & Dependencies
 
@@ -18,7 +20,7 @@ Please organize the code into the following files within the `src/` directory:
 -   `extension.ts`: The main entry point. Handles extension activation (`activate`) and deactivation (`deactivate`). It will orchestrate the other modules.
 -   `metrics.ts`: Defines and manages all Prometheus metrics using `prom-client`. It will export functions to initialize metrics and update their values.
 -   `metricsServer.ts`: Contains the logic for the Node.js `http` server. It will expose a `/metrics` endpoint.
--   `copilotMonitor.ts`: Contains the logic for listening to Copilot Chat events and extracting the relevant data.
+-   `copilotMonitor.ts`: Contains the logic for discovering, reading, and parsing Copilot Chat log files to extract relevant data.
 
 ## 4. Detailed Implementation Plan
 
@@ -51,29 +53,41 @@ Please organize the code into the following files within the `src/` directory:
     -   The response `Content-Type` header must be set to `text/plain; version=0.0.4`.
     -   Export `startMetricsServer()` and `stopMetricsServer()` functions.
 
+
 ### Phase 3: Copilot Chat Data Capture (`copilotMonitor.ts`)
 
-This is the most critical part. We need to listen to chat events and extract the data.
+This is the most critical part. **There is no public API for monitoring Copilot Chat events.** Instead, we will extract metrics by reading and parsing Copilot Chat log files written by the extension.
 
-1.  **Event Listener:**
-    -   Use the `vscode.chat.onDidPerformUserAction` event. This is the official API for monitoring chat interactions.
-    -   The listener for this event should be registered in the `activate` function and its disposable should be added to `context.subscriptions`.
+#### Log Scraping Approach
 
-2.  **Data Discovery and Extraction:**
-    -   Inside the event listener, the `event` object is our source of data. The most valuable information is expected to be in `event.result.metadata`.
-    -   **Crucial Step:** Your first implementation should simply `console.log(JSON.stringify(event, null, 2))` to the Debug Console. This will allow us to inspect the full object structure during a live debugging session.
-    -   Based on the inspection, write defensive code to extract the following (these are hypotheses, the actual paths may differ):
-        -   **Model Name:** Likely found in a property like `event.result.metadata.model` or similar.
-        -   **Token Counts:** Look for an object like `event.result.metadata.tokens` containing `prompt` and `completion` values.
-        -   **Participant ID:** Available directly from `event.participant`.
-        -   **Latency:** Calculate this by recording `Date.now()` when the request starts and subtracting it from `Date.now()` inside the `onDidPerformUserAction` listener.
+1. **Log File Discovery:**
+    - Copilot Chat logs are typically found in a path like `~/.config/Code/logs/<date>/window*/exthost/GitHub.copilot-chat/GitHub Copilot Chat.log`.
+    - Multiple VS Code windows will create multiple `window*` folders, each with its own log file.
+    - Some folders may be empty or missing the log file; always check for file existence before processing.
+    - The extension should scan all recent `window*` folders for valid log files, prioritizing the most recent by date.
 
-3.  **Update Metrics:**
-    -   After extracting the data, call the exported functions from `metrics.ts` to update the corresponding Prometheus metrics with the correct labels.
+2. **Log File Monitoring:**
+    - Log files may be rotated or deleted by VS Code/Copilot after a while. The extension should handle log file disappearance gracefully and re-scan periodically for new files.
+    - Use file system watchers or polling to detect new log entries in real time.
+
+3. **Data Extraction:**
+    - Parse each new log entry (usually JSON lines) to extract relevant metrics:
+        - **Model Name** (e.g., `gpt-4`)
+        - **Token Counts** (prompt and completion)
+        - **Participant ID**
+        - **Latency** (if available, or calculate from timestamps)
+    - Aggregate metrics across all active log files.
+
+4. **Update Metrics:**
+    - After extracting the data, call the exported functions from `metrics.ts` to update the corresponding Prometheus metrics with the correct labels.
+
+5. **Robustness:**
+    - Handle empty folders, missing files, and log rotation.
+    - Support multiple VS Code windows by monitoring all relevant log files.
 
 ## 5. Coding Style and Best Practices
 
 -   Write clean, well-commented TypeScript.
 -   Use `async/await` for all asynchronous operations.
--   Implement robust error handling using `try...catch` blocks, especially when accessing potentially non-existent properties on the `metadata` object.
--   Ensure all disposables (like event listeners) are properly managed in `context.subscriptions` to prevent memory leaks.
+-   Implement robust error handling using `try...catch` blocks, especially when reading/parsing log files and extracting properties.
+-   Ensure all file watchers or timers are properly disposed in `context.subscriptions` to prevent memory leaks.

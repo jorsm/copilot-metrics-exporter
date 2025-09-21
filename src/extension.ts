@@ -1,26 +1,26 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
+import { initializeCopilotMonitor } from "./copilotMonitor";
+import { startMetricsServer, stopMetricsServer } from "./metricsServer";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  // Start Prometheus metrics server
+  startMetricsServer();
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "copilot-metrics-exporter" is now active!');
+  // Initialize Copilot monitor (event listener)
+  initializeCopilotMonitor(context);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('copilot-metrics-exporter.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from copilot-metrics-exporter!');
-	});
-
-	context.subscriptions.push(disposable);
+  // (Optional) Register the default helloWorld command for now
+  const disposable = vscode.commands.registerCommand("copilot-metrics-exporter.helloWorld", () => {
+    vscode.window.showInformationMessage("Hello World from copilot-metrics-exporter!");
+  });
+  context.subscriptions.push(disposable);
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  stopMetricsServer();
+}

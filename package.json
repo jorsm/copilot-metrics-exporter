@@ -4,12 +4,14 @@
   "description": "Gain granular insights into your personal GitHub Copilot Chat usage directly within VS Code. This extension monitors your chat interactions to capture key statistics like token consumption and model identifiers. It then exposes this data on a local HTTP endpoint using a Prometheus-compatible format. Connect it to your own Prometheus and Grafana stack to visualize and analyze your personal LLM usage patterns over time.",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.104.0"
+    "vscode": "^1.103.2"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -45,5 +47,8 @@
     "typescript": "^5.9.2",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2"
+  },
+  "dependencies": {
+    "prom-client": "^14.1.1"
   }
 }
